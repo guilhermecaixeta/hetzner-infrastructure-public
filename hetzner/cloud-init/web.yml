@@ -1,0 +1,49 @@
+#cloud-config
+fqdn: web
+
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    enp7s0:
+      dhcp4: true
+
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - software-properties-common
+
+runcmd:
+  - |
+    cat <<EOF >> "/etc/network/interfaces"
+    auto eth0
+    iface eth0 inet dhcp
+        post-up echo 1 > /proc/sys/net/ipv4/ip_forward
+        post-up iptables -t nat -A POSTROUTING -s '${ip_range}' -o eth0 -j MASQUERADE
+    EOF
+  - sudo sed -i -e '/^\(#\|\)IPV6/s/^.*$/IPV6=\"no\"/g'  /etc/default/ufw
+  - sudo sed -i -e '/^\(#\|\)DEFAULT_FORWARD_POLICY/s/^.*$/DEFAULT_FORWARD_POLICY=\"ACCEPT\"/g'  /etc/default/ufw
+  - sudo sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
+  - sysctl -p
+  - |
+    cat > "/tmp/heredoc_nat" <<-EOC
+    # NAT table rules
+    # NAT
+    :PREROUTING ACCEPT [0:0]
+    :POSTROUTING ACCEPT [0:0]
+
+    # Port Forwardings
+    -A PREROUTING -i eth0 -p tcp --dport ${ssh_port} -j DNAT --to-destination ${ip_accessories}
+
+    # Forward traffic through eth0 - Change to match you out-interface
+    -A POSTROUTING -s ${ip_range} -o eth0 -j MASQUERADE
+
+    COMMIT
+    EOC
+  - sed -i "10r/tmp/heredoc_nat" "/etc/ufw/before.rules"
+  - rm "/tmp/heredoc_nat"
+  - sed -i -e '/^\(#\|\)AllowTcpForwarding/s/^.*$/AllowTcpForwarding yes/' /etc/ssh/sshd_config
+  - sed -i -e '/^\(#\|\)AllowAgentForwarding/s/^.*$/AllowAgentForwarding yes/' /etc/ssh/sshd_config
+  - mkdir /root/letsencrypt
+  - touch /root/letsencrypt/acme.json
+  - chmod 600 -R /root/letsencrypt

@@ -1,0 +1,16 @@
+#cloud-config
+fqdn: acessories
+
+runcmd:
+  - | 
+    cat <<'EOF' >> /etc/network/interfaces
+    auto enp7s0
+    iface enp7s0 inet static
+      address ${ip_accessories}
+      mtu 1450
+      post-up ip route add default via ${ip_gateway}
+      dns-nameservers 185.12.64.2 185.12.64.1
+    EOF
+  - sed -i -e '/^\(#\|\)source/s/^.*$/# source/' /etc/network/interfaces
+  - sed -i -e '/^\(#\|\)AllowTcpForwarding/s/^.*$/AllowTcpForwarding no/' /etc/ssh/sshd_config
+  - sed -i -e '/^\(#\|\)AllowAgentForwarding/s/^.*$/AllowAgentForwarding no/' /etc/ssh/sshd_config

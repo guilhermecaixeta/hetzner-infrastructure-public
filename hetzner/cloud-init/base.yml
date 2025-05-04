@@ -1,0 +1,74 @@
+timezone: Europe/Lisbon
+
+manage_etc_hosts: true
+package_update: true
+package_upgrade: true
+
+packages:
+  - fail2ban
+  - ufw
+  - curl
+  - git
+  - snapd
+  - ifupdown
+
+users:
+  - name: ${user_deploy}
+    passwd: ${user_deploy_password}
+    groups: sudo, users, admin, root
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ${user_deploy_ssh_pub}
+    uid: 1000
+  - name: ${user_manager}
+    passwd: ${user_manager_password}
+    groups: users, admin, root
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ${user_manager_ssh_pub}
+    uid: 1001
+
+write_files:
+  - path: /etc/cloud/templates/hosts.debian.tmpl
+    content: |
+      ${ip_web} web
+      ${ip_accessories} accessories
+    append: true
+  - path: /etc/netplan/01-netplan.yaml
+    content: |
+      network:
+        version: 2
+        ethernets:
+          eth0:
+            nameservers:
+              addresses:
+                - 1.1.1.1
+                - 1.0.0.1
+    permissions: "0600"
+
+runcmd:
+  - dpkg --configure -a
+  - curl -fsSL https://get.docker.com | sh
+  - printf "[sshd]\nenabled = true\nbanaction = iptables-multiport\nport = ${ssh_port}" > /etc/fail2ban/jail.local
+  - systemctl enable fail2ban
+  - ufw allow OpenSSH
+  - ufw allow 53/udp
+  - ufw allow ${ufw_tcp_ports}/tcp
+  - ufw allow ${ssh_port}/tcp
+  - ufw enable
+  - sed -i -e '/^\(#\|\)Port/s/^.*$/Port ${ssh_port}/' /etc/ssh/sshd_config
+  - sed -i -e '/^\(#\|\)PasswordAuthentication/s/^.*$/PasswordAuthentication no/' /etc/ssh/sshd_config
+  - sed -i -e '/^\(#\|\)KbdInteractiveAuthentication/s/^.*$/KbdInteractiveAuthentication no/' /etc/ssh/sshd_config
+  - sed -i -e '/^\(#\|\)ChallengeResponseAuthentication/s/^.*$/ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
+  - sed -i -e '/^\(#\|\)MaxAuthTries/s/^.*$/MaxAuthTries 3/' /etc/ssh/sshd_config
+  - sed -i -e '/^\(#\|\)X11Forwarding/s/^.*$/X11Forwarding no/' /etc/ssh/sshd_config
+  - sed -i -e '/^\(#\|\)AuthorizedKeysFile/s/^.*$/AuthorizedKeysFile .ssh\/authorized_keys/' /etc/ssh/sshd_config
+  - sed -i -e '/^\(#\|\)PermitRootLogin/s/^.*$/PermitRootLogin no/' /etc/ssh/sshd_config
+  - sed -i '$a AllowUsers ${user_manager} ${user_deploy}' /etc/ssh/sshd_config
+  - netplan apply
+  - usermod -aG docker ${user_deploy}
+  - snap install btop
+  - setfacl -R -m u:${user_deploy}:rwx /home/${user_deploy}
+  - reboot

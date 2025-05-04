@@ -1,0 +1,27 @@
+{
+  "name": "Infrastructure",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "workspaceMount": "type=bind,source=${localWorkspaceFolder},dst=/app",
+  "mounts": ["type=bind,source=/root/.ssh,dst=/root/.ssh,readonly", "type=bind,source=/root/.aws,dst=/root/.aws"],
+  "workspaceFolder": "/app",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "hashicorp.terraform",
+        "foxundermoon.shell-format",
+        "bmalehorn.shell-syntax",
+        "mark-tucker.aws-cli-configure",
+        "amazonwebservices.aws-toolkit-vscode",
+        "mhutchie.git-graph",
+        "donjayamanne.git-extension-pack",
+        "redhat.vscode-yaml",
+        "github.vscode-github-actions"
+      ]
+    }
+  },
+  "remoteUser": "root",
+  "postCreateCommand": "chmod +x /app/.devcontainer/post-create.sh && /app/.devcontainer/post-create.sh"
+}
